@@ -190,8 +190,11 @@ See
 for file hashes, the exact build command, the ADB shell invocation, root
 verification, and the known limitations.
 
-## Authorship
+## Authorship and acknowledgments
 
-This profile and report were prepared with AI agent assistance (target
-constants, source packaging, and documentation). Hardware execution and
-verification were performed by the device owner on the exact device.
+This profile and report were prepared in OpenCode with DeepSeek V4.1 Flash
+(target constants, source packaging, and documentation). Hardware execution
+and verification were performed by the device owner on the exact device.
+
+Thanks to the Root My Galaxy maintainers and to the authors of the
+CVE-2026-43499 exploit source (NebuSec / CyberMeowfia).
