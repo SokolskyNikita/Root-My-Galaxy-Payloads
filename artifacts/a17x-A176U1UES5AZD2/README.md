@@ -14,8 +14,11 @@ A normal APK process cannot use the required tracefs path. An APK frontend
 would need to delegate the runner to an ADB-shell or Shizuku shell service;
 that integration is not part of this PR.
 
-No KernelSU module is included. The payload provides a temporary soft root
-only.
+The payload itself provides a temporary soft root only. A KernelSU LKM pair for
+this same device is published alongside it under `kernelsu/`, with the load
+steps and the Manager result in
+[`../../docs/SM-A176U1-A176U1UES5AZD2.md`](../../docs/SM-A176U1-A176U1UES5AZD2.md)
+and the rebuild recipe in [`../../kernelsu/README.md`](../../kernelsu/README.md).
 
 ## Files
 

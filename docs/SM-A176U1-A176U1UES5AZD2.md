@@ -183,6 +183,83 @@ rebooted. That failure mode is documented below.
 - Do not rerun the exploit while root is live, and do not kill the parked
   slide child or stability keeper; reboot is the safe cleanup.
 
+## KernelSU
+
+A KernelSU LKM built for this exact target is published with the profile and
+loaded on top of the payload's root:
+
+```text
+kernelsu/android13-5.15_kernelsu-a17x-A176U1UES5AZD2-ksu331.ko
+size: 390712
+SHA-256: 97cda22acd04989ab677031f562e3bb80be0732191e6b944942728022bcef7c1
+
+kernelsu/ksud-a17x-A176U1UES5AZD2-ksu331
+size: 5133632
+SHA-256: cf0d0ae003640b509f605b8e290bd02902ac1dfdb5053dc58fb74b7a7c9d56a5
+```
+
+It is KernelSU v3.3.1 (kernel version 32680, UAPI 5), which is what makes it
+pair with the v3.3.1 Manager: the Manager requires
+`kernelUAPIVersion == managerUAPIVersion` and silently runs in a reduced state
+otherwise. The Samsung KDP/RKP/DEFEX work is rebased onto that tag by
+[`kernelsu/patches/KernelSU-v3.3.1-samsung-kdp-rkp-defex-a17x.patch`](../kernelsu/patches/KernelSU-v3.3.1-samsung-kdp-rkp-defex-a17x.patch),
+and `CONFIG_KSU_SAMSUNG_NO_PATCH_TEXT=y` keeps live text patching off, because
+RKP rejects writes to kernel text and the syscall table in EL2 on this device.
+The module therefore installs its fallback: a `__arm64_sys_setresuid` kretprobe
+for Manager FD delivery plus the sucompat syscall kprobes.
+
+Load it from a boot that already has the payload's root:
+
+```sh
+adb push ksud-a17x-A176U1UES5AZD2-ksu331 /data/local/tmp/ksud-s25u-kdp
+adb shell chmod 755 /data/local/tmp/ksud-s25u-kdp     # path is fixed in su_daemon.c
+adb shell "/data/local/tmp/cve-2026-43499-root --late-load"
+```
+
+The helper's guarded `--late-load` runs the loader in a private mount namespace
+with the loader bind-mounted over `/system/bin/logcat`, because Samsung DEFEX
+blocks executing a file from `/data/local/tmp` from a privileged task (a direct
+`ksud late-load` prints only `Killed`). Start it from an adb shell, not from a
+root context — the client is executed by adbd and only the daemon runs
+privileged. It is silent on success.
+
+Expected state afterwards:
+
+```text
+$ adb shell grep kernelsu /proc/modules
+kernelsu 241664 0 - Live 0x0000000000000000 (OE)
+$ adb shell getenforce
+Enforcing
+```
+
+Measured on the exact device, 2026-10-24, from `Permissive` with no `kernelsu`
+in `/proc/modules`. The `RC=0` matters: the helper only returns 0 after
+`verify_kernelsu_control()` opens the KernelSU control fd through the
+`reboot(0xDEADBEEF, 0xCAFEBABE, …)` magic and reads a non-zero version, so the
+kernel side answered. `/sys/module/kernelsu` does not exist on purpose — the
+module deletes its own kobject at the end of init.
+
+Install the matching Manager and open it:
+
+```sh
+adb install KernelSU_v3.3.1_32680-release.apk     # versionCode 32680
+adb shell am start -n me.weishu.kernelsu/.ui.MainActivity
+```
+
+Status: `Working <LKM>` / `[Jailbreak mode]` / `Version: 32680-5` with SELinux
+`Enforcing` (screenshot:
+[`SM-A176U1-A176U1UES5AZD2-KernelSU.png`](SM-A176U1-A176U1UES5AZD2-KernelSU.png)).
+The app is genuinely talking to the module — `/proc/modules` goes `0` → `1`
+while it is open, because the app holds the driver fd.
+
+Limitations: the load is per boot (a reboot clears the module), it needs the
+payload's root first, and it closes the payload's own su channel for the rest of
+the boot, because the module replaces the SELinux policy and calls
+`setenforce(true)` — the shell no longer reaches `/data/local/tmp/temp_su.sock`.
+`--ephemeral` deliberately skips the `/data/adb` installation, so the Manager
+runs without the ksud daemon and daemon-backed features (module install, and so
+on) are out of scope here.
+
 ## Artifacts and commands
 
 See
